@@ -66,8 +66,3 @@ async def convert_pdf(file: UploadFile = File(...)):
             os.remove(temp_path)
 
         await file.close()
-
-
-@app.get("/")
-async def root():
-    return {"message": "PDF to Markdown API is running"}
