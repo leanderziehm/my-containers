@@ -2,7 +2,10 @@ name: Publish containers to GHCR
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+    paths:
+      - 'projects/**'
   workflow_dispatch:
 
 permissions:
@@ -10,83 +13,19 @@ permissions:
   packages: write
 
 jobs:
-  discover:
-    runs-on: ubuntu-latest
-    outputs:
-      projects: ${{ steps.find.outputs.projects }}
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Discover changed projects
-        id: find
-        env:
-          BEFORE: ${{ github.event.before }}
-          HEAD: ${{ github.sha }}
-          EVENT: ${{ github.event_name }}
-        run: |
-          python3 <<'PY'
-          import json
-          import os
-          import subprocess
-          from pathlib import Path
-
-          # Find all projects containing a Dockerfile
-          all_projects = sorted(
-              str(p.parent)
-              for p in Path("projects").glob("*/*/Dockerfile")
-          )
-
-          # Build everything on manual execution
-          if os.environ["EVENT"] == "workflow_dispatch":
-              changed_projects = all_projects
-
-          else:
-              before = os.environ["BEFORE"]
-              head = os.environ["HEAD"]
-
-              # New branch or initial commit: build everything
-              if before == "0000000000000000000000000000000000000000":
-                  changed_projects = all_projects
-              else:
-                  changed_files = subprocess.check_output(
-                      ["git", "diff", "--name-only", before, head],
-                      text=True
-                  ).splitlines()
-
-                  changed_projects = [
-                      project
-                      for project in all_projects
-                      if any(
-                          f.startswith(project + "/")
-                          for f in changed_files
-                      )
-                  ]
-
-          print("Changed projects:", changed_projects)
-
-          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-              f.write(
-                  "projects=" +
-                  json.dumps(changed_projects) +
-                  "\n"
-              )
-          PY
-
   publish:
-    needs: discover
-    if: needs.discover.outputs.projects != '[]'
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        project: ${{ fromJson(needs.discover.outputs.projects) }}
+        project:
+          - projects/category-one/app-one
+          - projects/category-one/app-two
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set image name
         id: image
@@ -96,7 +35,6 @@ jobs:
 
           echo "name=ghcr.io/${OWNER}/${PROJECT}" >> "$GITHUB_OUTPUT"
 
-      # Enable ARM64 emulation
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -110,7 +48,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Build and publish AMD64 + ARM64
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
