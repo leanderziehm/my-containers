@@ -3,14 +3,14 @@ services:
     image: ghcr.io/leanderziehm/languagetool-api:latest
     container_name: languagetool-api
     expose:
-      - "8020:8010"
+      - "8010"
     restart: unless-stopped
 
   frontend:
     image: docker.io/library/nginx:alpine
     container_name: languagetool-frontend
     ports:
-      - "8081:80"
+      - "8003:80"
     volumes:
       - ./static/index.html:/usr/share/nginx/html/index.html:ro,Z
       - ./conf/nginx.conf:/etc/nginx/conf.d/default.conf:ro,Z
