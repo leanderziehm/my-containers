@@ -1,0 +1,13 @@
+[project]
+name = "espeak-api"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "LeanderZiehm", email = "git@leanderziehm.com" }
+]
+dependencies = [
+    "fastapi>=0.165.0",
+    "python-multipart>=0.0.34",
+    "uvicorn>=0.54.0",
+]
