@@ -6,48 +6,98 @@ on:
       - main
     paths:
       - 'projects/**'
-
   workflow_dispatch:
+    inputs:
+      build_all:
+        description: 'Build every project, not just changed ones'
+        type: boolean
+        default: true
 
 permissions:
   contents: read
   packages: write
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   discover:
     runs-on: ubuntu-latest
     outputs:
       projects: ${{ steps.find.outputs.projects }}
+      has_projects: ${{ steps.find.outputs.has_projects }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Discover projects
+      - name: Discover changed projects
         id: find
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BUILD_ALL: ${{ github.event.inputs.build_all }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
         run: |
           python3 <<'PY'
           import json
-          from pathlib import Path
           import os
+          import subprocess
+          from pathlib import Path
 
-          projects = sorted(
-              str(d.parent)
-              for d in Path("projects").rglob("Dockerfile")
+          # Every directory under projects/ that contains a Dockerfile
+          all_projects = sorted(
+              d.parent.as_posix() for d in Path("projects").rglob("Dockerfile")
           )
 
-          print("Discovered projects:")
-          for project in projects:
-              print(f" - {project}")
+          def changed_files():
+              before = os.environ.get("BEFORE", "")
+              if not before or set(before) == {"0"}:
+                  return None  # new branch / unknown base
+              result = subprocess.run(
+                  ["git", "diff", "--name-only", before, os.environ["SHA"]],
+                  capture_output=True, text=True,
+              )
+              if result.returncode != 0:
+                  return None  # e.g. force-push, base commit missing
+              return [line for line in result.stdout.splitlines() if line]
 
-          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-              f.write(f"projects={json.dumps(projects)}\n")
+          build_all = (
+              os.environ["EVENT_NAME"] == "workflow_dispatch"
+              and os.environ.get("BUILD_ALL", "true") == "true"
+          )
+          files = None if build_all else changed_files()
+
+          if files is None:
+              # Can't determine a diff -> build everything to be safe
+              selected = all_projects
+          else:
+              selected = set()
+              for f in files:
+                  # Attribute each file to the deepest project that contains it,
+                  # so nested projects don't trigger their parents.
+                  owners = [p for p in all_projects if f.startswith(p + "/")]
+                  if owners:
+                      selected.add(max(owners, key=len))
+              selected = sorted(selected)
+
+          print("Projects to build:")
+          for p in selected:
+              print(f" - {p}")
+          if not selected:
+              print(" (none)")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"projects={json.dumps(selected)}\n")
+              out.write(f"has_projects={'true' if selected else 'false'}\n")
           PY
 
   publish:
     needs: discover
-    if: ${{ needs.discover.outputs.projects != '[]' }}
-
+    if: ${{ needs.discover.outputs.has_projects == 'true' }}
     runs-on: ubuntu-latest
 
     strategy:
@@ -63,8 +113,7 @@ jobs:
         id: image
         run: |
           OWNER=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
-          PROJECT=$(basename "${{ matrix.project }}")
-
+          PROJECT=$(basename "${{ matrix.project }}" | tr '[:upper:]' '[:lower:]')
           echo "name=ghcr.io/${OWNER}/${PROJECT}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
@@ -89,3 +138,5 @@ jobs:
           tags: |
             ${{ steps.image.outputs.name }}:latest
             ${{ steps.image.outputs.name }}:sha-${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.project }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.project }}
