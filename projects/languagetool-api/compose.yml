@@ -1,9 +1,9 @@
 services:
   languagetool:
-    build: .
-    container_name: custom-languagetool
+    image: ghcr.io/leanderziehm/languagetool-api:latest
+    container_name: languagetool-api
     expose:
-      - "8010"
+      - "8020:8010"
     restart: unless-stopped
 
   frontend:
