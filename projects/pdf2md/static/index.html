@@ -1,0 +1,499 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF to Markdown Converter</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 30px;
+            font-family: Arial, sans-serif;
+            background: #ffffff;
+            color: #222;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 26px;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: #777;
+            margin-bottom: 30px;
+        }
+
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 45px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+        }
+
+        .upload-area:hover,
+        .upload-area.dragover {
+            border-color: #333;
+            background: #fafafa;
+        }
+
+        .upload-area p {
+            margin: 8px 0;
+            color: #666;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        button {
+            padding: 10px 18px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background: white;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background: #f3f3f3;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .primary-btn {
+            background: #222;
+            color: white;
+            border-color: #222;
+        }
+
+        .primary-btn:hover {
+            background: #444;
+            color: white;
+        }
+
+        .file-info {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #555;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .status {
+            margin-top: 15px;
+            font-size: 14px;
+        }
+
+        .error {
+            color: #c62828;
+        }
+
+        .success {
+            color: #267a3e;
+        }
+
+        .editor-section {
+            margin-top: 35px;
+        }
+
+        .editor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .editor-header h2 {
+            font-size: 19px;
+            margin: 0;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 550px;
+            padding: 18px;
+            resize: vertical;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-family: Consolas, monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            outline: none;
+        }
+
+        textarea:focus {
+            border-color: #555;
+        }
+
+        .editor-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 15px;
+            height: 15px;
+            border: 2px solid #ddd;
+            border-top-color: #222;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 15px;
+            }
+
+            textarea {
+                min-height: 400px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <h1>PDF to Markdown</h1>
+    <p class="subtitle">
+        Upload a PDF and convert its contents into editable Markdown.
+    </p>
+
+    <!-- Upload Area -->
+    <div class="upload-area" id="uploadArea">
+        <h3>Drop your PDF here</h3>
+        <p>or click below to browse your files</p>
+        <p>Ctrl + V also works for clipboard files</p>
+
+        <button type="button" id="browseBtn">
+            Select PDF
+        </button>
+
+        <input
+            type="file"
+            id="fileInput"
+            accept=".pdf,application/pdf"
+        >
+    </div>
+
+    <div class="file-info" id="fileInfo">
+        No file selected.
+    </div>
+
+    <!-- Upload Actions -->
+    <div class="actions">
+        <button
+            class="primary-btn"
+            id="convertBtn"
+            disabled
+        >
+            Convert to Markdown
+        </button>
+
+        <button type="button" id="clearBtn">
+            Clear
+        </button>
+    </div>
+
+    <div class="status" id="status"></div>
+
+    <!-- Markdown Editor -->
+    <div class="editor-section">
+
+        <div class="editor-header">
+            <h2>Markdown Output</h2>
+
+            <div class="editor-actions">
+                <button id="copyBtn" type="button">
+                    Copy Markdown
+                </button>
+
+                <button id="downloadBtn" type="button">
+                    Download .md
+                </button>
+            </div>
+        </div>
+
+        <textarea
+            id="markdownOutput"
+            placeholder="Your converted Markdown will appear here. You can edit the text directly..."
+            spellcheck="false"
+        ></textarea>
+
+    </div>
+
+</div>
+
+<script>
+    // Change this if your FastAPI server runs elsewhere.
+    const API_URL = "/convert";
+
+    const uploadArea = document.getElementById("uploadArea");
+    const fileInput = document.getElementById("fileInput");
+    const browseBtn = document.getElementById("browseBtn");
+    const convertBtn = document.getElementById("convertBtn");
+    const clearBtn = document.getElementById("clearBtn");
+
+    const fileInfo = document.getElementById("fileInfo");
+    const status = document.getElementById("status");
+    const markdownOutput = document.getElementById("markdownOutput");
+
+    const copyBtn = document.getElementById("copyBtn");
+    const downloadBtn = document.getElementById("downloadBtn");
+
+    let selectedFile = null;
+    let isConverting = false;
+
+    // File selection
+    browseBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        fileInput.click();
+    });
+
+    uploadArea.addEventListener("click", () => {
+        fileInput.click();
+    });
+
+    fileInput.addEventListener("change", (event) => {
+        if (event.target.files.length) {
+            setFile(event.target.files[0]);
+        }
+    });
+
+    // Set selected file
+    function setFile(file) {
+        if (!file) return;
+
+        if (
+            file.type !== "application/pdf" &&
+            !file.name.toLowerCase().endsWith(".pdf")
+        ) {
+            showStatus("Please select a PDF file.", "error");
+            return;
+        }
+
+        selectedFile = file;
+
+        fileInfo.textContent =
+            `Selected: ${file.name} (${formatSize(file.size)})`;
+
+        convertBtn.disabled = false;
+        status.textContent = "";
+    }
+
+    // Format file size
+    function formatSize(bytes) {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) {
+            return (bytes / 1024).toFixed(1) + " KB";
+        }
+
+        return (bytes / (1024 * 1024)).toFixed(2) + " MB";
+    }
+
+    // Drag and drop
+    ["dragenter", "dragover"].forEach(eventName => {
+        uploadArea.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            uploadArea.classList.add("dragover");
+        });
+    });
+
+    ["dragleave", "drop"].forEach(eventName => {
+        uploadArea.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            uploadArea.classList.remove("dragover");
+        });
+    });
+
+    uploadArea.addEventListener("drop", (event) => {
+        const files = event.dataTransfer.files;
+
+        if (files.length) {
+            setFile(files[0]);
+        }
+    });
+
+    // Paste PDF from clipboard
+    document.addEventListener("paste", (event) => {
+        const items = event.clipboardData.items;
+
+        for (const item of items) {
+            if (item.kind !== "file") continue;
+
+            const file = item.getAsFile();
+
+            if (
+                file &&
+                (
+                    file.type === "application/pdf" ||
+                    file.name.toLowerCase().endsWith(".pdf")
+                )
+            ) {
+                setFile(file);
+                event.preventDefault();
+                return;
+            }
+        }
+    });
+
+    // Convert PDF
+    convertBtn.addEventListener("click", async () => {
+        if (!selectedFile || isConverting) return;
+
+        isConverting = true;
+        convertBtn.disabled = true;
+        clearBtn.disabled = true;
+
+        convertBtn.innerHTML =
+            '<span class="spinner"></span>Converting...';
+
+        showStatus("Uploading and converting PDF...", "");
+
+        try {
+            const formData = new FormData();
+
+            formData.append("file", selectedFile);
+
+            const response = await fetch(API_URL, {
+                method: "POST",
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    data.detail || "PDF conversion failed."
+                );
+            }
+
+            markdownOutput.value = data.markdown || "";
+
+            showStatus(
+                `Successfully converted ${data.filename}.`,
+                "success"
+            );
+
+        } catch (error) {
+            showStatus(error.message, "error");
+
+        } finally {
+            isConverting = false;
+
+            convertBtn.disabled = !selectedFile;
+            clearBtn.disabled = false;
+
+            convertBtn.textContent = "Convert to Markdown";
+        }
+    });
+
+    // Copy Markdown
+    copyBtn.addEventListener("click", async () => {
+        try {
+            await navigator.clipboard.writeText(
+                markdownOutput.value
+            );
+
+            showStatus("Markdown copied to clipboard.", "success");
+
+        } catch (error) {
+            markdownOutput.select();
+
+            const copied = document.execCommand("copy");
+
+            showStatus(
+                copied
+                    ? "Markdown copied to clipboard."
+                    : "Could not copy Markdown.",
+                copied ? "success" : "error"
+            );
+        }
+    });
+
+    // Download Markdown
+    downloadBtn.addEventListener("click", () => {
+        const blob = new Blob(
+            [markdownOutput.value],
+            { type: "text/markdown;charset=utf-8" }
+        );
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+
+        const baseName = selectedFile
+            ? selectedFile.name.replace(/\.pdf$/i, "")
+            : "converted";
+
+        link.href = url;
+        link.download = baseName + ".md";
+
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        URL.revokeObjectURL(url);
+    });
+
+    // Clear everything
+    clearBtn.addEventListener("click", () => {
+        selectedFile = null;
+
+        fileInput.value = "";
+        fileInfo.textContent = "No file selected.";
+        markdownOutput.value = "";
+
+        convertBtn.disabled = true;
+
+        showStatus("", "");
+    });
+
+    // Status messages
+    function showStatus(message, type) {
+        status.textContent = message;
+        status.className = "status " + type;
+    }
+
+</script>
+
+</body>
+</html>

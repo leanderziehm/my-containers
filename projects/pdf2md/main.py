@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import pymupdf4llm
 import tempfile
 import os
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 app = FastAPI(title="PDF to Markdown API")
 
@@ -14,7 +16,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Serve index.html and other static assets
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
+@app.get("/")
+def index():
+    return FileResponse("static/index.html")
 
 @app.post("/convert")
 async def convert_pdf(file: UploadFile = File(...)):
