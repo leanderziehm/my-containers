@@ -152,3 +152,66 @@ def get_voices(
             detail="Failed to retrieve eSpeak voices"
         )
 
+
+
+@app.get("/voices/languages")
+def get_languages():
+    try:
+        result = subprocess.run(
+            ["espeak-ng", "--voices=all"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=True,
+        )
+
+        languages = {}
+
+        for line in result.stdout.splitlines():
+            parts = line.split(maxsplit=5)
+
+            if len(parts) < 5:
+                continue
+
+            language = parts[1].lower()
+
+            # Group regional variants under their main language
+            code = language.split("-")[0]
+
+            if code not in languages:
+                languages[code] = {
+                    "code": code,
+                    "name": {
+                        "en": "English",
+                        "de": "German",
+                        "fr": "French",
+                        "es": "Spanish",
+                        "it": "Italian",
+                        "pt": "Portuguese",
+                        "ru": "Russian",
+                        "ja": "Japanese",
+                        "zh": "Chinese",
+                        "ar": "Arabic",
+                        "hi": "Hindi",
+                        "nl": "Dutch",
+                        "sv": "Swedish",
+                        "pl": "Polish",
+                    }.get(code, code.upper()),
+                    "voice_count": 0
+                }
+
+            languages[code]["voice_count"] += 1
+
+        return {
+            "count": len(languages),
+            "languages": sorted(
+                languages.values(),
+                key=lambda x: x["name"]
+            )
+        }
+
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="Voice listing timed out")
+
+    except subprocess.CalledProcessError:
+        raise HTTPException(status_code=500, detail="Failed to retrieve languages")

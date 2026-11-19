@@ -165,17 +165,21 @@
 
         <div class="settings">
 
-            <div>
-                <label for="voice">Voice</label>
-                <select id="voice">
-                    <option value="en-us">English (US)</option>
-                    <option value="en-gb">English (UK)</option>
-                    <option value="de">German</option>
-                    <option value="es">Spanish</option>
-                    <!-- <option value="fr">French</option> -->
-                    <!-- <option value="it">Italian</option> -->
+
+            <div class="voice-selector">
+
+                <label for="language">Language</label>
+                <select id="language">
+                    <option value="">Loading languages...</option>
                 </select>
+
+                <label for="voice">Voice</label>
+                <select id="voice" disabled>
+                    <option value="">Select a language first</option>
+                </select>
+
             </div>
+
 
             <div>
                 <label for="speed">Speed</label>
@@ -217,11 +221,14 @@
 </div>
 
 <script>
+    const API = "";
     const form = document.getElementById("ttsForm");
     const button = document.getElementById("generateBtn");
     const status = document.getElementById("status");
     const audio = document.getElementById("audio");
     const download = document.getElementById("download");
+    const languageSelect = document.getElementById("language");
+    const voiceSelect = document.getElementById("voice");
 
     let audioUrl = null;
 
@@ -229,10 +236,17 @@
         event.preventDefault();
 
         const text = document.getElementById("text").value.trim();
-        const voice = document.getElementById("voice").value;
         const speed = Number(document.getElementById("speed").value);
         const pitch = Number(document.getElementById("pitch").value);
+        // const voice = document.getElementById("voice").value;
 
+        const voice = voiceSelect.value;
+
+        if (!voice) {
+            alert("Please select a voice");
+            return;
+        }
+        
         if (!text) {
             status.textContent = "Please enter some text.";
             return;
@@ -298,6 +312,105 @@
             button.textContent = "Generate Speech";
         }
     });
+
+
+
+
+// Load all languages
+async function loadLanguages() {
+    try {
+        const response = await fetch(`${API}/voices/languages`);
+        if (!response.ok) throw new Error("Failed to load languages");
+
+        const data = await response.json();
+
+        // Remove special categories like "variant"
+        data.languages = data.languages.filter(
+            language => language.code !== "variant"
+        );
+
+        // Sort by voice count (highest first)
+        data.languages.sort((a, b) => b.voice_count - a.voice_count);
+
+        languageSelect.innerHTML =
+            '<option value="">Select language</option>';
+
+        data.languages.forEach(language => {
+            const option = document.createElement("option");
+
+            option.value = language.code;
+            option.textContent =
+                `${language.name} (${language.voice_count})`;
+
+            languageSelect.appendChild(option);
+        });
+
+        // Auto-select first language and load its voices
+        if (data.languages.length > 0) {
+            languageSelect.selectedIndex = 1;
+            loadVoices(languageSelect.value);
+        }
+
+    } catch (error) {
+        console.error(error);
+        languageSelect.innerHTML =
+            '<option value="">Could not load languages</option>';
+    }
+}
+
+// Load voices when language changes
+async function loadVoices(language) {
+    voiceSelect.disabled = true;
+    voiceSelect.innerHTML =
+        '<option value="">Loading voices...</option>';
+
+    if (!language) {
+        voiceSelect.innerHTML =
+            '<option value="">Select a language first</option>';
+        return;
+    }
+
+    try {
+        const response = await fetch(
+            `${API}/voices?variant=${encodeURIComponent(language)}`
+        );
+
+        if (!response.ok) throw new Error("Failed to load voices");
+
+        const data = await response.json();
+
+        voiceSelect.innerHTML =
+            '<option value="">Select voice</option>';
+
+        data.voices.forEach(voice => {
+            const option = document.createElement("option");
+
+            option.value = voice.language;
+            option.textContent =
+                `${voice.name.replaceAll("_", " ")} [${voice.language}]`;
+
+            voiceSelect.appendChild(option);
+        });
+
+        if (data.voices.length > 0) {
+            voiceSelect.selectedIndex = 1;
+            voiceSelect.disabled = false;
+        }
+
+    } catch (error) {
+        console.error(error);
+        voiceSelect.innerHTML =
+            '<option value="">Could not load voices</option>';
+    }
+}
+// Listen for language selection
+languageSelect.addEventListener("change", event => {
+    loadVoices(event.target.value);
+});
+
+// Initialize
+loadLanguages();
+
 </script>
 
 </body>
