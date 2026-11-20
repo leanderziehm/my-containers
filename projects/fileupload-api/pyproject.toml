@@ -1,0 +1,14 @@
+[project]
+name = "fileupload-api"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "LeanderZiehm", email = "git@leanderziehm.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.165.0",
+    "python-multipart>=0.0.34",
+    "uvicorn>=0.54.0",
+]
