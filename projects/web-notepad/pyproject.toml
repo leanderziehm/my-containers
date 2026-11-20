@@ -1,0 +1,13 @@
+[project]
+name = "web-notepad"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "LeanderZiehm", email = "git@leanderziehm.com" }
+]
+requires-python = ">=3.9"
+dependencies = [
+    "fastapi>=0.128.8",
+    "uvicorn>=0.39.0",
+]
